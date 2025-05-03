@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploy a Linux EC2 instance in SampleNetworkCrossStack network, with Elastic IP.
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t2.micro
+      - t3.micro
+      - t3.small
+      - t3.medium
+    ConstraintDescription: must be a valid EC2 instance type.
+
+  EnvironmentName:
+    Description: Name used to prefix resources
+    Type: String
+    Default: DevInstance
+
+Mappings:
+  RegionMap:
+    us-east-1:
+      AMI: ami-0c2b8ca1dad447f8a
+    us-east-2:
+      AMI: ami-0e472ba40eb589f49
+    us-west-1:
+      AMI: ami-04fc83311a8d478df
+    us-west-2:
+      AMI: ami-0892d3c7ee96c0bf7
+
+Resources:
+
+  EC2Instance:
+    Type: AWS::EC2::Instancelcear
+    
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !FindInMap [RegionMap, !Ref "AWS::Region", AMI]
+      SubnetId: !ImportValue SampleNetworkCrossStack-SubnetID
+      SecurityGroupIds:
+        - !ImportValue SampleNetworkCrossStack-SecurityGroupID
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-LinuxInstance'
+      UserData:
+          Fn::Base64: !Sub |
+             #!/bin/bash
+             yum update -y
+             yum install -y httpd
+             systemctl start httpd
+             systemctl enable http
+             mkdir -p /var/www/html
+             echo "Michael's CrossStack using CloudFormation" >> /var/www/html/index.html
+
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref EC2Instance
+
+Outputs:
+  PrivateIP:
+    Description: Private IPv4 address of the EC2 instance
+    Value: !GetAtt EC2Instance.PrivateIp
+
+  PrivateDNS:
+    Description: Private DNS name of the EC2 instance
+    Value: !GetAtt EC2Instance.PrivateDnsName
